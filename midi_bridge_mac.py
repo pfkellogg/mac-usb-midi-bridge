@@ -14,6 +14,8 @@ USB port ("USB Composite Device") or through a MIDI interface's 5-pin OUT
   * All notes off — lit only while a note or the sustain pedal is down
   * a virtual "MIDI Bridge" input: other Mac apps (e.g. Karaoke MIDI Mash) can
     play the FM-1 through the bridge while it holds the keyboard
+  * a virtual "MIDI Bridge (show notes)" input: treated like the keyboard, so
+    notes from e.g. an ear-training site in Chrome pop up the pitch panel
   * optional start at login
 
 Run:  python3 midi_bridge_mac.py      (or the MIDI Bridge.app built by ./make_app.sh)
@@ -28,13 +30,15 @@ import tkinter as tk
 
 import mido
 
-VERSION = "1.2"
+VERSION = "1.3"
 APP_NAME = "MIDI Bridge"
 SETTINGS_DIR = os.path.expanduser("~/Library/Application Support/MIDI Bridge")
 SETTINGS = os.path.join(SETTINGS_DIR, "settings.json")
 AGENT_LABEL = "com.pfkellogg.midibridge"
 AGENT = os.path.expanduser(f"~/Library/LaunchAgents/{AGENT_LABEL}.plist")
 VIRTUAL_NAME = "MIDI Bridge"
+# Same, but its notes also pop up the pitch panel (ear-training sites, etc.).
+SHOW_NAME = "MIDI Bridge (show notes)"
 
 # Keyboards first; the Keystation's second port is DAW transport control, never a source.
 FROM_HINTS = ["keystation", "m-audio", "minilab", "keylab", "arturia", "akai", "novation", "keyboard"]
@@ -92,7 +96,8 @@ class Bridge:
     def __init__(self, settings):
         self.settings = settings
         self.lock = threading.RLock()
-        self.inp = self.out = self.virtual = None
+        self.inp = self.out = None
+        self.virtuals = []
         self.connected_from = self.connected_to = None
         self.error = None
         self.msg_count = 0
@@ -185,11 +190,12 @@ class Bridge:
                 return
             self.inp, self.out = inp, out
             self.connected_from, self.connected_to = frm, to
-            if self.virtual is None:
-                try:
-                    self.virtual = mido.open_input(VIRTUAL_NAME, virtual=True, callback=self._from_app)
-                except Exception:
-                    self.virtual = None  # not fatal: just no sharing
+            if not self.virtuals:
+                for name, cb in ((VIRTUAL_NAME, self._from_app), (SHOW_NAME, self._from_keys)):
+                    try:
+                        self.virtuals.append(mido.open_input(name, virtual=True, callback=cb))
+                    except Exception:
+                        pass  # not fatal: just no sharing
 
     def disconnect(self, close_virtual=False):
         with self.lock:
@@ -203,12 +209,13 @@ class Bridge:
             self.connected_from = self.connected_to = None
             self.held.clear()
             self.sustain.clear()
-            if close_virtual and self.virtual:
-                try:
-                    self.virtual.close()
-                except Exception:
-                    pass
-                self.virtual = None
+            if close_virtual:
+                for v in self.virtuals:
+                    try:
+                        v.close()
+                    except Exception:
+                        pass
+                self.virtuals = []
 
     def set_on(self, want):
         self.settings["on"] = want

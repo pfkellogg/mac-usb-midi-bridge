@@ -13,6 +13,7 @@ The Mac twin of [Android USB MIDI Bridge](https://github.com/pfkellogg/android-u
 - A big note readout, plus a large note / octave / frequency panel that pops up while you play.
 - **All notes off**, lit only while a note or the sustain pedal is down.
 - A virtual **"MIDI Bridge"** input, so other Mac apps can play the synth through the bridge while it holds the keyboard. Their channels are passed through unchanged.
+- A second virtual input, **"MIDI Bridge (show notes)"**, for web apps such as ear-trainers in Chrome (Web MIDI). It is treated like the keyboard, so its notes play on channel 1 and pop up the pitch panel.
 - Optional start at login.
 
 ## Run
